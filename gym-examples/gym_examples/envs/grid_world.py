@@ -26,6 +26,12 @@ class GridWorldEnv(gym.Env):
             }
         )
 
+        #Observation Variables
+        self.recharge_station = [0, 0, 0, 0]
+        self.recharge_color = (255,255,0)
+        self.recharge_time = 2
+        self.time = 0
+
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
         self.action_space = spaces.Discrete(4)
 
@@ -94,6 +100,8 @@ class GridWorldEnv(gym.Env):
                 0, self.size, size=2, dtype=int
             )
 
+        self.time = 0
+
         observation = self._get_obs()
         info = self._get_info()
 
@@ -103,8 +111,19 @@ class GridWorldEnv(gym.Env):
         return observation, info
 
     def step(self, action):
+        
         # Map the action (element of {0,1,2,3}) to the direction we walk in
-        direction = self._action_to_direction[action]
+        direction = np.array([0,0])
+
+        if self.recharge_station == [0,0,0,0]:
+            direction = self._action_to_direction[action]
+            self.recharge_color = (255,255,0)
+            self.recharge_time = 2
+
+        else:
+            self.recharge_station = [0,0,0,0]
+            self.recharge_time -= 1
+
         # We use `np.clip` to make sure we don't leave the grid
         self._agent_location = np.clip(
             self._agent_location + direction, 0, self.size - 1
@@ -115,6 +134,12 @@ class GridWorldEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
+        self.time += 1
+
+        if np.array_equal(self._agent_location, self._recharge_location) and self.recharge_time > 0 :
+            self.recharge_color = (0,255,255)
+            self.recharge_station = [1,0,0,0]
+        
         if self.render_mode == "human":
             self._render_frame()
 
@@ -160,7 +185,7 @@ class GridWorldEnv(gym.Env):
         #Recharge
         pygame.draw.rect(
             canvas,
-            (255, 255, 0),
+            self.recharge_color,
             pygame.Rect(
                 pix_square_size * self._recharge_location,
                 (pix_square_size, pix_square_size),
@@ -238,11 +263,11 @@ if __name__ == '__main__':
         frames.append(px)
 
     #  media.show_image(env.render())
-    if terminated or truncated:
-        observation, info = env.reset()
-        print("Terminated")
+        if terminated or truncated:
+            observation, info = env.reset()
+            #print("Terminated")
 
     env.close()
     #print(frames)
     #print(np.random.randint(0,4))
-    media.write_video('temp/video2.mp4', frames, fps=20)
+    media.write_video('temp/videotrial.mp4', frames, fps=5)
