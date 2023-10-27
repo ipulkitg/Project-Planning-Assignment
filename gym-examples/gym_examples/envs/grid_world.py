@@ -29,7 +29,7 @@ class GridWorldEnv(gym.Env):
         #Observation Variables
         self.recharge_station = [0, 0, 0, 0]
         self.recharge_color = (255,255,0)
-        self.recharge_time = 2
+        self.recharge_time = 5
         self.time = 0
 
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
@@ -84,7 +84,7 @@ class GridWorldEnv(gym.Env):
                 0, self.size, size=2, dtype=int
             )
         
-        # Factoy
+        # Factory
 
         self._factory_location = self._agent_location
         while np.array_equal(self._factory_location, self._agent_location) or np.array_equal(self._factory_location, self._target_location):
@@ -118,11 +118,11 @@ class GridWorldEnv(gym.Env):
         if self.recharge_station == [0,0,0,0]:
             direction = self._action_to_direction[action]
             self.recharge_color = (255,255,0)
-            self.recharge_time = 2
-
-        else:
+            self.recharge_time = 5
+        elif self.recharge_time == 0:
             self.recharge_station = [0,0,0,0]
-            self.recharge_time -= 1
+            
+        self.recharge_time -= 1
 
         # We use `np.clip` to make sure we don't leave the grid
         self._agent_location = np.clip(
@@ -270,4 +270,4 @@ if __name__ == '__main__':
     env.close()
     #print(frames)
     #print(np.random.randint(0,4))
-    media.write_video('temp/videotrial.mp4', frames, fps=5)
+    media.write_video('temp/videotrial.mp4', frames, fps=10)
