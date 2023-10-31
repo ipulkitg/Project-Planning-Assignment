@@ -8,6 +8,25 @@ import time
 import itertools
 from typing import Callable, NamedTuple, Optional, Union, List
 
+class LogisticBot:
+    def __init__(self,currLoc,destLoc) -> None:
+        self.currLoc = currLoc
+        self.destLoc = destLoc
+        self.tasks = []
+        self.poll = []
+        self.charge = 100
+    
+class RechargeStation:
+    def __init__(self) -> None:
+        self.slots = [0,0,0,0]
+
+class Factory:
+    def __init__(self,raw,procTime) -> None:
+        self.raw = raw
+        self.procTime = procTime
+        self.rawBuf = [0,0,0,0]
+        self.procBuf = [0,0,0,0]
+
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
