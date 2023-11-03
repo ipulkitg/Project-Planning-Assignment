@@ -8,24 +8,132 @@ import time
 import itertools
 from typing import Callable, NamedTuple, Optional, Union, List
 
+# Complications:
+# issue 1 - How to contact between RL Agent and Bots.
+# issue 2 - Propagate actions to all the Bots.
+# issue 3 - 
+
+
+#Global Variables
+step_charge_cost = 5 
+step_recharge = 5
+logistic_limit = 4
+raw_limit = 4
+proc_limit = 4
+recharge_slots = 4
+processing = 0
+
 class LogisticBot:
     def __init__(self,currLoc,destLoc) -> None:
         self.currLoc = currLoc
         self.destLoc = destLoc
         self.tasks = []
-        self.poll = []
+        #task length
+        self.poll = False #Implement as a function
         self.charge = 100
+        self.storage = []
+        self.storage_limit = logistic_limit
+
+    def plan_movement(self):
+        # Move Left or Right till you are on the same coloumn, then move Up or Down till you reach Destination
+        if self.currLoc[0] == self.destLoc[0]: 
+            if self.currLoc[1] > self.destLoc[1]:
+                #Move Down
+                self.currLoc[1] -= 1
+            elif self.currLoc[1] < self.destLoc[1]:
+                #Move Up
+                self.currLoc[1] += 1
+            else:
+                pass
+                #We are done so remove first task from list  
+        elif self.currLoc[0] > self.destLoc[0]: 
+            #Move Left
+            self.currLoc[0] -= 1
+        else:
+            #Move Right
+            self.currLoc[0] += 1
+
+        self.charge -= step_charge_cost
+
+    def pickup_dropoff_mats(self,raw,rawBuf,procBuf):
+        # Check and try to dropoff
+        i = 0
+        rem_storage = raw_limit - len(rawBuf)
+        raw_l = []
+
+        for r in self.storage:
+            if i == rem_storage:
+                break
+            if r == raw:
+                raw_l.append(i)
+                i += 1
+
+        rawBuf += raw_l
+        
+        # while raw in self.storage or len(rawBuf) != raw_limit:
+        #     if self.storage[i] == raw:
+        #         mat = self.storage.pop(i)
+        #         rawBuf.append(mat)
+        #     i += 1
+
+        #Check and try to pickup
+        while procBuf or len(self.storage) != logistic_limit:
+            mat = procBuf.pop()
+            self.storage.append(mat)
+
+        #Check if you are on a factory and which factory
+        #Check the amount of materials in the ProcBuff
+
+        #Optimize to just check which all materials are raw and append to the rawBuf at once
+
+        #Things to work on: work on recharge station function
+
+
+
     
 class RechargeStation:
     def __init__(self) -> None:
-        self.slots = [0,0,0,0]
+        self.slots = []
+
+    #When a bot reaches a station
+    def put_to_charge(self,curr_charge):       
+        if len(self.slots) != recharge_slots:
+            self.slots.append(curr_charge)
+
+    #Every step
+    def charge(self):
+        for charge in self.slots:
+            charge += step_recharge
+            if charge >= 100:
+                self.slots.remove(charge)
+                
+
 
 class Factory:
-    def __init__(self,raw,procTime) -> None:
-        self.raw = raw
+    def __init__(self,raw,processed,procTime,rawBuf_len,procBuf_len) -> None:
+        self.raw = raw 
+        self.processed = processed
         self.procTime = procTime
-        self.rawBuf = [0,0,0,0]
-        self.procBuf = [0,0,0,0]
+        self.rawBuf = []
+        self.rawBuf_len = rawBuf_len
+        self.procBuf = []
+        self.procBuf_len = procBuf_len
+        self.processing = procTime #Since each factory may process concurrently, a temp variable to count down to 0
+
+    def raw_to_proc(self):
+        if self.raw and self.processing == self.procTime:
+            self.rawBuff.pop()
+        elif len(self.procBuf) != proc_limit and self.processing == 0:
+            self.procBuf.append(self.processed)
+            self.processing == self.procTime
+        elif len(self.procBuf) == proc_limit:
+            #Negative Reward for not picking up materials
+            pass
+        else:
+            self.processing -= 1
+
+
+        #Convert raw to proc
 
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
@@ -36,9 +144,18 @@ class GridWorldEnv(gym.Env):
 
         # Observations are dictionaries with the agent's and the target's location.
         # Each location is encoded as an element of {0, ..., `size`}^2, i.e. MultiDiscrete([size, size]).
+
+        agentDict = {}
+        agentNum = 'agent1'
+        for i in range(3):
+            agentDict[agentNum] = spaces.Box(0, size - 1, shape=(2,), dtype=int)
+            agentNum = agentNum.replace(str(i+1),str(i+2)) 
+            
+        print(agentDict)
+        
         self.observation_space = spaces.Dict(
             {
-                "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                "agent": spaces.Dict(agentDict),
                 "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
                 "factory": spaces.Box(0, size - 1, shape=(2,), dtype=int),
                 "recharge": spaces.Box(0, size - 1, shape=(2,), dtype=int)
