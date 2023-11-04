@@ -66,6 +66,7 @@ class LogisticBot:
                 break
             if r == raw:
                 raw_l.append(i)
+                self.storage.pop(raw)
                 i += 1
 
         rawBuf += raw_l
