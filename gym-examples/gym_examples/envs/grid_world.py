@@ -24,10 +24,20 @@ recharge_slots = 4
 processing = 0
 
 class LogisticBot:
-    def __init__(self,currLoc,destLoc) -> None:
+    def __init__(self,currLoc,id) -> None:
+        self.id = id
         self.currLoc = currLoc
-        self.destLoc = destLoc
-        self.tasks = []
+        self.destLoc = currLoc
+        self.tasks = [] 
+
+        #List of possible tasks:
+        # 1. Go to location
+        #     a) Go to factory and carry out pickup/dropoff tasks  --- Possibly can split pickup and dropoff tasks
+        #     b) Go to recharge station for charging
+        # 2. Ask for more tasks
+        #     a) If task list is empty
+        #     b) If in the same location for a while (If waiting recharge station or if we implement stochastic factories for pickup and the bot is waiting in that location for a while)
+        
         #task length
         self.poll = False #Implement as a function
         self.charge = 100
@@ -66,16 +76,9 @@ class LogisticBot:
                 break
             if r == raw:
                 raw_l.append(i)
-                self.storage.pop(raw)
                 i += 1
 
         rawBuf += raw_l
-        
-        # while raw in self.storage or len(rawBuf) != raw_limit:
-        #     if self.storage[i] == raw:
-        #         mat = self.storage.pop(i)
-        #         rawBuf.append(mat)
-        #     i += 1
 
         #Check and try to pickup
         while procBuf or len(self.storage) != logistic_limit:
@@ -84,31 +87,25 @@ class LogisticBot:
 
         #Check if you are on a factory and which factory
         #Check the amount of materials in the ProcBuff
-
-        #Optimize to just check which all materials are raw and append to the rawBuf at once
-
-        #Things to work on: work on recharge station function
-
-
-
     
 class RechargeStation:
     def __init__(self) -> None:
         self.slots = []
 
     #When a bot reaches a station
-    def put_to_charge(self,curr_charge):       
+    def put_to_charge(self,curr_charge,id):       
         if len(self.slots) != recharge_slots:
-            self.slots.append(curr_charge)
+            self.slots.append([curr_charge,id]) #We are appending each id and their current charge
 
-    #Every step
+    #Every step 
     def charge(self):
-        for charge in self.slots:
-            charge += step_recharge
-            if charge >= 100:
-                self.slots.remove(charge)
-                
-
+        id_list = []                                  #List of IDs
+        for charge in range(len(self.slots)):         
+            self.slots[charge][0] += step_recharge
+            if self.solts[charge][0] >= 100:          #If we are fully charged then free the slot and add the bot's id to id_list
+                done = self.slots.pop(charge)
+                id_list.append(done[1])
+        return id_list                                #Return the list of IDs so that the environment can notify which bots are free to move (To be Done)
 
 class Factory:
     def __init__(self,raw,processed,procTime,rawBuf_len,procBuf_len) -> None:
@@ -120,19 +117,21 @@ class Factory:
         self.procBuf = []
         self.procBuf_len = procBuf_len
         self.processing = procTime #Since each factory may process concurrently, a temp variable to count down to 0
+        self.proc_check = False
 
     def raw_to_proc(self):
-        if self.raw and self.processing == self.procTime:
-            self.rawBuff.pop()
-        elif len(self.procBuf) != proc_limit and self.processing == 0:
+        if self.rawBuf and self.processing == self.procTime: #if there is raw materials in buffer and the prev raw material is not processing
+            self.rawBuf.pop()
+            self.proc_check = True
+        elif len(self.procBuf) != proc_limit and self.processing <= 0: #if processing is over and proc buffer is not full
             self.procBuf.append(self.processed)
             self.processing == self.procTime
-        elif len(self.procBuf) == proc_limit:
+            self.proc_check = False
+        elif len(self.procBuf) == proc_limit: #if it is full
             #Negative Reward for not picking up materials
             pass
-        else:
+        elif self.proc_check:
             self.processing -= 1
-
 
         #Convert raw to proc
 
@@ -164,9 +163,6 @@ class GridWorldEnv(gym.Env):
         )
 
         #Observation Variables
-        self.recharge_station = [0, 0, 0, 0]
-        self.recharge_color = (255,255,0)
-        self.recharge_time = 5
         self.time = 0
 
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
@@ -247,35 +243,30 @@ class GridWorldEnv(gym.Env):
 
         return observation, info
 
-    def step(self, action):
+    def step(self):
         
         # Map the action (element of {0,1,2,3}) to the direction we walk in
-        direction = np.array([0,0])
 
-        if self.recharge_station == [0,0,0,0]:
-            direction = self._action_to_direction[action]
-            self.recharge_color = (255,255,0)
-            self.recharge_time = 5
-        elif self.recharge_time == 0:
-            self.recharge_station = [0,0,0,0]
-            
-        self.recharge_time -= 1
+        #Recharge work
 
-        # We use `np.clip` to make sure we don't leave the grid
-        self._agent_location = np.clip(
-            self._agent_location + direction, 0, self.size - 1
-        )
+        # # We use `np.clip` to make sure we don't leave the grid
+        # self._agent_location = np.clip(
+        #     self._agent_location + direction, 0, self.size - 1
+        # )
+
         # An episode is done iff the agent has reached the target
-        terminated = np.array_equal(self._agent_location, self._target_location)
-        reward = 1 if terminated else 0  # Binary sparse rewards
+        # terminated = np.array_equal(self._agent_location, self._target_location)
+        # reward = 1 if terminated else 0  # Binary sparse rewards
+
+
         observation = self._get_obs()
         info = self._get_info()
 
         self.time += 1
-
-        if np.array_equal(self._agent_location, self._recharge_location) and self.recharge_time > 0 :
-            self.recharge_color = (0,255,255)
-            self.recharge_station = [1,0,0,0]
+        #Terminate when time has reached over episode time limit
+        terminated = False
+        if self.time >= 500:
+            terminated = True
         
         if self.render_mode == "human":
             self._render_frame()
@@ -381,8 +372,6 @@ if __name__ == '__main__':
 
     env = GridWorldEnv()
 
-
-
     observation, info = env.reset()
     print(observation)
 
@@ -395,7 +384,7 @@ if __name__ == '__main__':
 
     for _ in range(1000):
         action = np.random.randint(0,4)  # this is where you would insert your policy
-        observation, reward, terminated, truncated, info = env.step(action)
+        observation, reward, terminated, truncated, info = env.step()
         px = env._render_frame()
         frames.append(px)
 
