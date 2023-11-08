@@ -54,7 +54,7 @@ class LogisticBot:
                 #Move Up
                 self.currLoc[1] += 1
             else:
-                pass
+                return True
                 #We are done so remove first task from list  
         elif self.currLoc[0] > self.destLoc[0]: 
             #Move Left
@@ -64,6 +64,7 @@ class LogisticBot:
             self.currLoc[0] += 1
 
         self.charge -= step_charge_cost
+        return False #Has not reached the destination yet
 
     def pickup_dropoff_mats(self,raw,rawBuf,procBuf):
         # Check and try to dropoff
@@ -78,7 +79,7 @@ class LogisticBot:
                 raw_l.append(i)
                 i += 1
 
-        rawBuf += raw_l
+        rawBuf += raw_l # +1
 
         #Check and try to pickup
         while procBuf or len(self.storage) != logistic_limit:
@@ -89,8 +90,9 @@ class LogisticBot:
         #Check the amount of materials in the ProcBuff
     
 class RechargeStation:
-    def __init__(self) -> None:
+    def __init__(self,loc) -> None:
         self.slots = []
+        self.loc = loc
 
     #When a bot reaches a station
     def put_to_charge(self,curr_charge,id):       
@@ -108,8 +110,9 @@ class RechargeStation:
         return id_list                                #Return the list of IDs so that the environment can notify which bots are free to move (To be Done)
 
 class Factory:
-    def __init__(self,raw,processed,procTime,rawBuf_len,procBuf_len) -> None:
+    def __init__(self,raw,processed,loc,procTime,rawBuf_len,procBuf_len) -> None:
         self.raw = raw 
+        self.loc = loc
         self.processed = processed
         self.procTime = procTime
         self.rawBuf = []
@@ -138,9 +141,12 @@ class Factory:
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size=5):
+    def __init__(self, bots, factories, stations, render_mode=None, size=5):
         self.size = size  # The size of the square grid
         self.window_size = 512  # The size of the PyGame window
+        self.bots = bots
+        self.factories = factories
+        self.stations = stations
 
         # Observations are dictionaries with the agent's and the target's location.
         # Each location is encoded as an element of {0, ..., `size`}^2, i.e. MultiDiscrete([size, size]).
@@ -194,7 +200,7 @@ class GridWorldEnv(gym.Env):
         self.clock = None
 
     def _get_obs(self):
-        return {"agent": self._agent_location, "target": self._target_location}
+        return ()
 
     def _get_info(self):
         return {
@@ -258,6 +264,17 @@ class GridWorldEnv(gym.Env):
         # terminated = np.array_equal(self._agent_location, self._target_location)
         # reward = 1 if terminated else 0  # Binary sparse rewards
 
+        reached = self.bots['id'].plan_movement()
+
+        if reached:
+            if self.bots['id'].currLoc == self.factories['id'].loc:
+                self.factories['id'].pickup_dropoff_mats()
+            elif self.bots['id'].currLoc == self.stations['id'].loc:
+                self.stations['id'].put_to_charge(self.bots['id'].charge, self.bots['id'].id)
+
+        #for all factories do raw_to_proc
+
+        #for all stations do charge
 
         observation = self._get_obs()
         info = self._get_info()
@@ -382,9 +399,11 @@ if __name__ == '__main__':
 
     frames = [] # Empty list to append frames to
 
+    bot = LogisticBot()
+
     for _ in range(1000):
         action = np.random.randint(0,4)  # this is where you would insert your policy
-        observation, reward, terminated, truncated, info = env.step()
+        observation, reward, terminated, truncated, info = env.step(bot)
         px = env._render_frame()
         frames.append(px)
 
