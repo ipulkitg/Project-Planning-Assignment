@@ -6,12 +6,19 @@ import mediapy as media
 import matplotlib.pyplot as plt
 import time
 import itertools
+import random
 from typing import Callable, NamedTuple, Optional, Union, List
 
 # Complications:
 # issue 1 - How to contact between RL Agent and Bots.
 # issue 2 - Propagate actions to all the Bots.
 # issue 3 - 
+
+# To do:
+# 1. Setup a step function to take actions list as input and give actions list as output
+# 2. Setup the fixed layout of our environment in our reset function
+# 3. Setting up the action and observation spaces.
+# 4. Setting up the reward function.
 
 
 #Global Variables
@@ -28,7 +35,7 @@ class LogisticBot:
         self.id = id
         self.currLoc = currLoc
         self.destLoc = currLoc
-        self.tasks = [] 
+        self.tasks = -1
 
         #List of possible tasks:
         # 1. Go to location
@@ -54,6 +61,7 @@ class LogisticBot:
                 #Move Up
                 self.currLoc[1] += 1
             else:
+                self.tasks = -1
                 return True
                 #We are done so remove first task from list  
         elif self.currLoc[0] > self.destLoc[0]: 
@@ -130,11 +138,12 @@ class Factory:
             self.procBuf.append(self.processed)
             self.processing == self.procTime
             self.proc_check = False
-        elif len(self.procBuf) == proc_limit: #if it is full
+        elif len(self.procBuf) == proc_limit: #if it is full return True
             #Negative Reward for not picking up materials
-            pass
+            return True
         elif self.proc_check:
             self.processing -= 1
+        return False # Return False when proc_Buff is not full
 
         #Convert raw to proc
 
@@ -144,7 +153,7 @@ class GridWorldEnv(gym.Env):
     def __init__(self, bots, factories, stations, render_mode=None, size=5):
         self.size = size  # The size of the square grid
         self.window_size = 512  # The size of the PyGame window
-        self.bots = bots
+        self.bots = bots  #[(object bot,id)]
         self.factories = factories
         self.stations = stations
 
@@ -159,6 +168,12 @@ class GridWorldEnv(gym.Env):
             
         print(agentDict)
         
+        # Task Statuses: Indirectly observed through the task array
+        # 1: Distances of the bot from various entities
+        # 2: Bot Current charge
+        # 3: The proc_Buff of the factories
+        # 4: The type of raw materials required for each factory
+
         self.observation_space = spaces.Dict(
             {
                 "agent": spaces.Dict(agentDict),
@@ -172,18 +187,36 @@ class GridWorldEnv(gym.Env):
         self.time = 0
 
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
-        self.action_space = spaces.Discrete(4)
+        self.action_space = spaces.Discrete(7)
 
         """
         The following dictionary maps abstract actions from `self.action_space` to 
         the direction we will walk in if that action is taken.
         I.e. 0 corresponds to "right", 1 to "up" etc.
         """
-        self._action_to_direction = {
-            0: np.array([1, 0]), #RIGHT
-            1: np.array([0, 1]), #UP
-            2: np.array([-1, 0]), #LEFT
-            3: np.array([0, -1]), #DOWN
+        # self._action_to_direction = {
+        #     0: np.array([1, 0]), #RIGHT
+        #     1: np.array([0, 1]), #UP
+        #     2: np.array([-1, 0]), #LEFT
+        #     3: np.array([0, -1]), #DOWN
+        # }
+
+        self.action_dict = {
+            0: "go_to_raw",
+            1: "go_to_inter",
+            2: "go_to_final",
+            3: "go_to_delivery",
+            4: "go_to_recharge",
+            5: "pickup_dropoff",
+            6: "recharge"
+        }
+
+        self.location_dict = {
+            0: (0,0), #Raw_factory
+            1: (2,2), #inter_factory
+            2: (0,4), #final_factory
+            3: (4,4), #Delivery_factory
+            4: (4,0) #Recharge_station
         }
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -212,6 +245,24 @@ class GridWorldEnv(gym.Env):
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
+
+        self.factory_raw = Factory(0,1,(0,0),0,1,4) # 1 is our raw material, 2 is intermediate, 3 is final
+
+        self.factory_inter = Factory(1,2,(2,2),4,4,4)
+
+        self.factory_final = Factory(2,3,(0,4),2,4,8)
+
+        self.factory_delivery = Factory(3,4,(4,4),0,8,1)
+
+        self.reacharge_station = RechargeStation((4,0))
+
+        #self.bots_list = [LogisticBot((2,0),1),LogisticBot((2,0),2),LogisticBot((2,0),3)] #Randomize bots start location
+
+        self.bots_list = []
+
+        for i in range(3):
+            loc = (random.randint(0,4),random.randint(0,4))
+            self.bots_list.append(LogisticBot(loc,i+1))
 
         # Choose the agent's location uniformly at random
         self._agent_location = self.np_random.integers(0, self.size, size=2, dtype=int)
@@ -249,7 +300,74 @@ class GridWorldEnv(gym.Env):
 
         return observation, info
 
-    def step(self):
+    def step(self, bots_task_list):
+        
+        for i,task in enumerate(bots_task_list):
+            if self.action_dict[task] == "go_to_raw":
+                self.bots_list[i].destLoc = self.location_dict[task]
+                self.bots_list[i].task = task
+            elif self.action_dict[task] == "go_to_inter":
+                self.bots_list[i].destLoc = self.location_dict[task]
+                self.bots_list[i].task = task
+            elif self.action_dict[task] == "go_to_final":
+                self.bots_list[i].destLoc = self.location_dict[task]
+                self.bots_list[i].task = task
+            elif self.action_dict[task] == "go_to_delivery":
+                self.bots_list[i].destLoc = self.location_dict[task]
+                self.bots_list[i].task = task
+            elif self.action_dict[task] == "go_to_recharge":
+                self.bots_list[i].destLoc = self.location_dict[task]
+                self.bots_list[i].task = task
+            elif self.action_dict[task] == "pickup_dropoff":
+                if self.bots_list[i].currLoc == self.factory_raw.loc:
+                    self.bots_list[i].pickup_dropoff_mats(self.factory_raw.raw,self.factory_raw.rawBuf,self.factory_raw.procBuf)
+                elif self.bots_list[i].currLoc == self.factory_inter.loc:
+                    self.bots_list[i].pickup_dropoff_mats(self.factory_inter.raw,self.factory_inter.rawBuf,self.factory_inter.procBuf)
+                elif self.bots_list[i].currLoc == self.factory_final.loc:
+                    self.bots_list[i].pickup_dropoff_mats(self.factory_final.raw,self.factory_final.rawBuf,self.factory_final.procBuf)
+                elif self.bots_list[i].currLoc == self.factory_delivery.loc:
+                    self.bots_list[i].pickup_dropoff_mats(self.factory_delivery.raw,self.factory_delivery.rawBuf,self.factory_delivery.procBuf)
+                else:
+                    self.bots_list[i].task = -1 #Do a small negative reward
+                self.bots_list[i].task = -1 #Do a small positive reward
+            elif self.action_dict[task] == "recharge":
+                if self.bots_list[i].currLoc == self.reacharge_station.loc:
+                    self.reacharge_station.put_to_charge(self.bots_list[i].charge,self.bots_list[i].id)
+                    self.bots_list[i].task = task #Do a small positive reward
+                else:
+                    self.bots_list[i].task = -1 #Do a small negative reward
+            
+        for i,bots in enumerate(self.bots_list): # Execute movement for each bot and then check if it is completed
+            if bots.tasks < 5 and bots.tasks >= 0: # If its a movement task then do movement
+                if bots.plan_movement():
+                    bots_task_list[i] = -1
+                    bots.tasks = -1
+        
+        bots_id_list = self.reacharge_station.charge()
+
+        if bots_id_list:
+            for bots in bots_id_list:
+                self.bots_list[bots-1].tasks = -1
+
+        self.factory_raw.rawBuf = [0]
+        if self.factory_raw.raw_to_proc():
+            # Small neg reward
+            pass
+        if self.factory_inter.raw_to_proc():
+            # Small neg reward
+            pass
+        if self.factory_final.raw_to_proc():
+            # Small neg reward
+            pass
+        delivered_len = len(self.factory_delivery.rawBuf)
+        self.factory_delivery.rawBuf = [] # Calculate reward based on delivered_len
+
+        for bots in self.bots_list:
+            if bots.charge <= 0:
+                # Big neg reward
+                terminated = True
+
+                
         
         # Map the action (element of {0,1,2,3}) to the direction we walk in
 
@@ -264,13 +382,13 @@ class GridWorldEnv(gym.Env):
         # terminated = np.array_equal(self._agent_location, self._target_location)
         # reward = 1 if terminated else 0  # Binary sparse rewards
 
-        reached = self.bots['id'].plan_movement()
+        # reached = self.bots['id'].plan_movement()
 
-        if reached:
-            if self.bots['id'].currLoc == self.factories['id'].loc:
-                self.factories['id'].pickup_dropoff_mats()
-            elif self.bots['id'].currLoc == self.stations['id'].loc:
-                self.stations['id'].put_to_charge(self.bots['id'].charge, self.bots['id'].id)
+        # if reached:
+        #     if self.bots['id'].currLoc == self.factories['id'].loc:
+        #         self.factories['id'].pickup_dropoff_mats()
+        #     elif self.bots['id'].currLoc == self.stations['id'].loc:
+        #         self.stations['id'].put_to_charge(self.bots['id'].charge, self.bots['id'].id)
 
         #for all factories do raw_to_proc
 
@@ -288,7 +406,7 @@ class GridWorldEnv(gym.Env):
         if self.render_mode == "human":
             self._render_frame()
 
-        return observation, reward, terminated, False, info
+        return observation, reward, terminated, False, info, bots_task_list
 
     def render(self):
         if self.render_mode == "rgb_array":
@@ -403,7 +521,7 @@ if __name__ == '__main__':
 
     for _ in range(1000):
         action = np.random.randint(0,4)  # this is where you would insert your policy
-        observation, reward, terminated, truncated, info = env.step(bot)
+        observation, reward, terminated, truncated, info, bots_task_list = env.step(bots_task_list) #2d array []
         px = env._render_frame()
         frames.append(px)
 
