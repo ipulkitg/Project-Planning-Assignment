@@ -15,9 +15,9 @@ from typing import Callable, NamedTuple, Optional, Union, List
 # issue 3 - 
 
 # To do:
-# 1. Setup a step function to take actions list as input and give actions list as output
-# 2. Setup the fixed layout of our environment in our reset function
-# 3. Setting up the action and observation spaces.
+# 1. Setup a step function to take actions list as input and give actions list as output : Mostly done
+# 2. Setup the fixed layout of our environment in our reset function : Mostly done
+# 3. Setting up the action and observation spaces. : Mostly done
 # 4. Setting up the reward function.
 
 
@@ -176,10 +176,49 @@ class GridWorldEnv(gym.Env):
 
         self.observation_space = spaces.Dict(
             {
-                "agent": spaces.Dict(agentDict),
-                "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                "factory": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                "recharge": spaces.Box(0, size - 1, shape=(2,), dtype=int)
+                # "agent": spaces.Dict(agentDict),
+                # "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                # "factory": spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                # "recharge": spaces.Box(0, size - 1, shape=(2,), dtype=int)
+                "bot_1_distances": spaces.Dict(
+                    {
+                        "factory_raw": spaces.Discrete(9),
+                        "factory_inter": spaces.Discrete(9),
+                        "factory_final": spaces.Discrete(9),
+                        "factory_delivery": spaces.Discrete(9),
+                        "recharge": spaces.Discrete(9)
+                    }
+                ),
+                "bot_2_distances": spaces.Dict({
+                        "factory_raw": spaces.Discrete(9),
+                        "factory_inter": spaces.Discrete(9),
+                        "factory_final": spaces.Discrete(9),
+                        "factory_delivery": spaces.Discrete(9),
+                        "recharge": spaces.Discrete(9)
+                }),
+                "bot_3_distances": spaces.Dict({
+                        "factory_raw": spaces.Discrete(9),
+                        "factory_inter": spaces.Discrete(9),
+                        "factory_final": spaces.Discrete(9),
+                        "factory_delivery": spaces.Discrete(9),
+                        "recharge": spaces.Discrete(9)
+                }),
+                "bot_charges": spaces.Dict({
+                        "bot_1": spaces.Discrete(101),
+                        "bot_2": spaces.Discrete(101),
+                        "bot_3": spaces.Discrete(101)
+                }),
+                "factory_raw": spaces.Dict({
+                        "factory_raw": spaces.Discrete(1),
+                        "factory_inter": spaces.Discrete(1),
+                        "factory_final": spaces.Discrete(1),
+                        "factory_delivery": spaces.Discrete(1)
+                }),
+                "factory_proc_buff": spaces.Dict({
+                        "factory_raw": spaces.Discrete(101),
+                        "factory_inter": spaces.Discrete(101),
+                        "factory_final": spaces.Discrete(101)
+                })
             }
         )
 
@@ -233,7 +272,48 @@ class GridWorldEnv(gym.Env):
         self.clock = None
 
     def _get_obs(self):
-        return ()
+        obs = {}
+        for i,bot in enumerate(self.bots_list):
+            obs_keys = ""
+            bot_loc = bot.currLoc
+            factor_raw_loc = self.factory_raw.loc
+            factor_inter_loc = self.factory_inter.loc
+            factor_final_loc = self.factory_final.loc
+            factor_delivery_loc = self.factory_delivery.loc
+            recharge_loc = self.reacharge_station.loc
+            bot_distances = {
+                        "factory_raw": abs(bot_loc[0] - factor_raw_loc[0]) + abs(bot_loc[1] - factor_raw_loc[1]),
+                        "factory_inter": abs(bot_loc[0] - factor_inter_loc[0]) + abs(bot_loc[1] - factor_inter_loc[1]),
+                        "factory_final": abs(bot_loc[0] - factor_final_loc[0]) + abs(bot_loc[1] - factor_final_loc[1]),
+                        "factory_delivery": abs(bot_loc[0] - factor_delivery_loc[0]) + abs(bot_loc[1] - factor_delivery_loc[1]),
+                        "recharge": abs(bot_loc[0] - recharge_loc[0]) + abs(bot_loc[1] - recharge_loc[1])
+                    }
+            obs_keys = "bot_" + str(i+1) + "_distances" 
+            obs[obs_keys] = bot_distances
+        
+        bot_charges = {
+                "bot_1": self.bots_list[0].charge,
+                "bot_2": self.bots_list[1].charge,
+                "bot_3": self.bots_list[2].charge
+            }
+        obs["bot_charges"] = bot_charges
+
+        factory_raw = {
+                "factory_raw": self.factory_raw.raw,
+                "factory_inter": self.factory_inter.raw,
+                "factory_final": self.factory_final.raw,
+                "factory_delivery": self.factory_delivery.raw
+        }
+        obs["factory_raw"] = factory_raw
+
+        factory_proc_buff = {
+                "factory_raw": int(len(self.factory_raw.procBuf)/self.factory_raw.procBuf_len*100),
+                "factory_inter": int(len(self.factory_inter.procBuf)/self.factory_inter.procBuf_len*100),
+                "factory_final": int(len(self.factory_final.procBuf)/self.factory_final.procBuf_len*100)
+        }
+        obs["factory_proc_buff"] = factory_proc_buff
+
+        return obs
 
     def _get_info(self):
         return {
@@ -245,6 +325,8 @@ class GridWorldEnv(gym.Env):
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
+
+        # (self,raw,processed,loc,procTime,rawBuf_len,procBuf_len)
 
         self.factory_raw = Factory(0,1,(0,0),0,1,4) # 1 is our raw material, 2 is intermediate, 3 is final
 
@@ -264,32 +346,6 @@ class GridWorldEnv(gym.Env):
             loc = (random.randint(0,4),random.randint(0,4))
             self.bots_list.append(LogisticBot(loc,i+1))
 
-        # Choose the agent's location uniformly at random
-        self._agent_location = self.np_random.integers(0, self.size, size=2, dtype=int)
-
-        # We will sample the target's location randomly until it does not coincide with the agent's location
-        self._target_location = self._agent_location
-        while np.array_equal(self._target_location, self._agent_location):
-            self._target_location = self.np_random.integers(
-                0, self.size, size=2, dtype=int
-            )
-        
-        # Factory
-
-        self._factory_location = self._agent_location
-        while np.array_equal(self._factory_location, self._agent_location) or np.array_equal(self._factory_location, self._target_location):
-            self._factory_location = self.np_random.integers(
-                0, self.size, size=2, dtype=int
-            )
-
-        #Recgarge
-
-        self._recharge_location = self._agent_location
-        while np.array_equal(self._recharge_location, self._agent_location) or np.array_equal(self._recharge_location, self._target_location) or np.array_equal(self._factory_location, self._recharge_location):
-            self._recharge_location = self.np_random.integers(
-                0, self.size, size=2, dtype=int
-            )
-
         self.time = 0
 
         observation = self._get_obs()
@@ -302,6 +358,8 @@ class GridWorldEnv(gym.Env):
 
     def step(self, bots_task_list):
         
+        terminated = False
+
         for i,task in enumerate(bots_task_list):
             if self.action_dict[task] == "go_to_raw":
                 self.bots_list[i].destLoc = self.location_dict[task]
@@ -367,39 +425,12 @@ class GridWorldEnv(gym.Env):
                 # Big neg reward
                 terminated = True
 
-                
-        
-        # Map the action (element of {0,1,2,3}) to the direction we walk in
-
-        #Recharge work
-
-        # # We use `np.clip` to make sure we don't leave the grid
-        # self._agent_location = np.clip(
-        #     self._agent_location + direction, 0, self.size - 1
-        # )
-
-        # An episode is done iff the agent has reached the target
-        # terminated = np.array_equal(self._agent_location, self._target_location)
-        # reward = 1 if terminated else 0  # Binary sparse rewards
-
-        # reached = self.bots['id'].plan_movement()
-
-        # if reached:
-        #     if self.bots['id'].currLoc == self.factories['id'].loc:
-        #         self.factories['id'].pickup_dropoff_mats()
-        #     elif self.bots['id'].currLoc == self.stations['id'].loc:
-        #         self.stations['id'].put_to_charge(self.bots['id'].charge, self.bots['id'].id)
-
-        #for all factories do raw_to_proc
-
-        #for all stations do charge
 
         observation = self._get_obs()
         info = self._get_info()
 
         self.time += 1
         #Terminate when time has reached over episode time limit
-        terminated = False
         if self.time >= 500:
             terminated = True
         
@@ -436,30 +467,77 @@ class GridWorldEnv(gym.Env):
             ),
         )
 
-        # Factory
+        # Factory Raw
         pygame.draw.rect(
             canvas,
             (0, 255, 0),
             pygame.Rect(
-                pix_square_size * self._factory_location,
+                pix_square_size * np.array([self.factory_raw.loc[0],self.factory_raw.loc[1]]), # Multiply with the location
                 (pix_square_size, pix_square_size),
             ),
         )
+
+        # Factory Inter
+        pygame.draw.rect(
+            canvas,
+            (0, 255, 0),
+            pygame.Rect(
+                pix_square_size * np.array([self.factory_inter.loc[0],self.factory_inter.loc[1]]), # Multiply with the location
+                (pix_square_size, pix_square_size),
+            ),
+        )
+
+        # Factory Final
+        pygame.draw.rect(
+            canvas,
+            (0, 255, 0),
+            pygame.Rect(
+                pix_square_size * np.array([self.factory_final.loc[0],self.factory_final.loc[1]]), # Multiply with the location
+                (pix_square_size, pix_square_size),
+            ),
+        )
+
+        # Factory Delivery
+        pygame.draw.rect(
+            canvas,
+            (0, 255, 0),
+            pygame.Rect(
+                pix_square_size * np.array([self.factory_delivery.loc[0],self.factory_delivery.loc[1]]), # Multiply with the location
+                (pix_square_size, pix_square_size),
+            ),
+        )
+
         #Recharge
         pygame.draw.rect(
             canvas,
             self.recharge_color,
             pygame.Rect(
-                pix_square_size * self._recharge_location,
+                pix_square_size * np.array([self.reacharge_station.loc[0],self.reacharge_station.loc[1]]),
                 (pix_square_size, pix_square_size),
             ),
         )
 
-        # Now we draw the agent
+        # Now we draw the agent 1
         pygame.draw.circle(
             canvas,
             (0, 0, 255),
-            (self._agent_location + 0.5) * pix_square_size,
+            (np.array(self.bots_list[0].currLoc[0],self.bots_list[0].currLoc[1]) + 0.5) * pix_square_size,
+            pix_square_size / 3,
+        )
+
+        # Now we draw the agent 2
+        pygame.draw.circle(
+            canvas,
+            (0, 0, 255),
+            (np.array(self.bots_list[1].currLoc[0],self.bots_list[1].currLoc[1]) + 0.5) * pix_square_size,
+            pix_square_size / 3,
+        )
+
+        # Now we draw the agent 3
+        pygame.draw.circle(
+            canvas,
+            (0, 0, 255),
+            (np.array(self.bots_list[2].currLoc[0],self.bots_list[2].currLoc[1]) + 0.5) * pix_square_size,
             pix_square_size / 3,
         )
 
