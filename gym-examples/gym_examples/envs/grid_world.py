@@ -35,7 +35,7 @@ class LogisticBot:
         self.id = id
         self.currLoc = currLoc
         self.destLoc = currLoc
-        self.tasks = -1
+        self.task = -1
 
         #List of possible tasks:
         # 1. Go to location
@@ -56,23 +56,25 @@ class LogisticBot:
         if self.currLoc[0] == self.destLoc[0]: 
             if self.currLoc[1] > self.destLoc[1]:
                 #Move Down
-                self.currLoc[1] -= 1
+                self.currLoc = (self.currLoc[0], self.currLoc[1]-1)
             elif self.currLoc[1] < self.destLoc[1]:
                 #Move Up
-                self.currLoc[1] += 1
+                self.currLoc = (self.currLoc[0], self.currLoc[1]+1)
             else:
-                self.tasks = -1
+                self.task = -1
                 return True
                 #We are done so remove first task from list  
         elif self.currLoc[0] > self.destLoc[0]: 
             #Move Left
-            self.currLoc[0] -= 1
+            self.currLoc = (self.currLoc[0] - 1, self.currLoc[1])
         else:
             #Move Right
-            self.currLoc[0] += 1
+            self.currLoc = (self.currLoc[0] + 1, self.currLoc[1])
 
         self.charge -= step_charge_cost
+
         return False #Has not reached the destination yet
+
 
     def pickup_dropoff_mats(self,raw,rawBuf,procBuf):
         # Check and try to dropoff
@@ -150,12 +152,12 @@ class Factory:
 class GridWorldEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, bots, factories, stations, render_mode=None, size=5):
+    def __init__(self, render_mode=None, size=5):
         self.size = size  # The size of the square grid
         self.window_size = 512  # The size of the PyGame window
-        self.bots = bots  #[(object bot,id)]
-        self.factories = factories
-        self.stations = stations
+        # self.bots = bots  #[(object bot,id)]
+        # self.factories = factories
+        # self.stations = stations
 
         # Observations are dictionaries with the agent's and the target's location.
         # Each location is encoded as an element of {0, ..., `size`}^2, i.e. MultiDiscrete([size, size]).
@@ -166,7 +168,7 @@ class GridWorldEnv(gym.Env):
             agentDict[agentNum] = spaces.Box(0, size - 1, shape=(2,), dtype=int)
             agentNum = agentNum.replace(str(i+1),str(i+2)) 
             
-        print(agentDict)
+        #print(agentDict)
         
         # Task Statuses: Indirectly observed through the task array
         # 1: Distances of the bot from various entities
@@ -224,6 +226,7 @@ class GridWorldEnv(gym.Env):
 
         #Observation Variables
         self.time = 0
+        self.recharge_color = (111,111,222)
 
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
         self.action_space = spaces.Discrete(7)
@@ -316,11 +319,12 @@ class GridWorldEnv(gym.Env):
         return obs
 
     def _get_info(self):
-        return {
-            "distance": np.linalg.norm(
-                self._agent_location - self._target_location, ord=1
-            )
-        }
+        # return {
+        #     "distance": np.linalg.norm(
+        #         self._agent_location - self._target_location, ord=1
+        #     )
+        # }
+        return 0
 
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
@@ -357,25 +361,29 @@ class GridWorldEnv(gym.Env):
         return observation, info
 
     def step(self, bots_task_list):
-        
         terminated = False
 
         for i,task in enumerate(bots_task_list):
             if self.action_dict[task] == "go_to_raw":
                 self.bots_list[i].destLoc = self.location_dict[task]
                 self.bots_list[i].task = task
+                #small neg reward if trying to go to same location
             elif self.action_dict[task] == "go_to_inter":
                 self.bots_list[i].destLoc = self.location_dict[task]
                 self.bots_list[i].task = task
+                #small neg reward if trying to go to same location
             elif self.action_dict[task] == "go_to_final":
                 self.bots_list[i].destLoc = self.location_dict[task]
                 self.bots_list[i].task = task
+                #small neg reward if trying to go to same location
             elif self.action_dict[task] == "go_to_delivery":
                 self.bots_list[i].destLoc = self.location_dict[task]
                 self.bots_list[i].task = task
+                #small neg reward if trying to go to same location
             elif self.action_dict[task] == "go_to_recharge":
                 self.bots_list[i].destLoc = self.location_dict[task]
                 self.bots_list[i].task = task
+                #small neg reward if trying to go to same location
             elif self.action_dict[task] == "pickup_dropoff":
                 if self.bots_list[i].currLoc == self.factory_raw.loc:
                     self.bots_list[i].pickup_dropoff_mats(self.factory_raw.raw,self.factory_raw.rawBuf,self.factory_raw.procBuf)
@@ -390,22 +398,22 @@ class GridWorldEnv(gym.Env):
                 self.bots_list[i].task = -1 #Do a small positive reward
             elif self.action_dict[task] == "recharge":
                 if self.bots_list[i].currLoc == self.reacharge_station.loc:
-                    self.reacharge_station.put_to_charge(self.bots_list[i].charge,self.bots_list[i].id)
-                    self.bots_list[i].task = task #Do a small positive reward
+                    self.reacharge_station.put_to_charge(self.bots_list[i].charge,self.bots_list[i].id) #100-self.bots_list[i].charge will give the scale of how much reward to give
+                    self.bots_list[i].task = task #Do a scale positive reward
                 else:
                     self.bots_list[i].task = -1 #Do a small negative reward
             
         for i,bots in enumerate(self.bots_list): # Execute movement for each bot and then check if it is completed
-            if bots.tasks < 5 and bots.tasks >= 0: # If its a movement task then do movement
+            if bots.task < 5 and bots.task >= 0: # If its a movement task then do movement
                 if bots.plan_movement():
                     bots_task_list[i] = -1
-                    bots.tasks = -1
+                    bots.task = -1
         
         bots_id_list = self.reacharge_station.charge()
 
         if bots_id_list:
             for bots in bots_id_list:
-                self.bots_list[bots-1].tasks = -1
+                self.bots_list[bots-1].task = -1
 
         self.factory_raw.rawBuf = [0]
         if self.factory_raw.raw_to_proc():
@@ -437,7 +445,7 @@ class GridWorldEnv(gym.Env):
         if self.render_mode == "human":
             self._render_frame()
 
-        return observation, reward, terminated, False, info, bots_task_list
+        return observation, 1, terminated, False, info, bots_task_list
 
     def render(self):
         if self.render_mode == "rgb_array":
@@ -457,16 +465,6 @@ class GridWorldEnv(gym.Env):
             self.window_size / self.size
         )  # The size of a single grid square in pixels
 
-        # First we draw the target
-        pygame.draw.rect(
-            canvas,
-            (255, 0, 0),
-            pygame.Rect(
-                pix_square_size * self._target_location,
-                (pix_square_size, pix_square_size),
-            ),
-        )
-
         # Factory Raw
         pygame.draw.rect(
             canvas,
@@ -480,7 +478,7 @@ class GridWorldEnv(gym.Env):
         # Factory Inter
         pygame.draw.rect(
             canvas,
-            (0, 255, 0),
+            (0, 255, 255),
             pygame.Rect(
                 pix_square_size * np.array([self.factory_inter.loc[0],self.factory_inter.loc[1]]), # Multiply with the location
                 (pix_square_size, pix_square_size),
@@ -490,7 +488,7 @@ class GridWorldEnv(gym.Env):
         # Factory Final
         pygame.draw.rect(
             canvas,
-            (0, 255, 0),
+            (0, 255, 255),
             pygame.Rect(
                 pix_square_size * np.array([self.factory_final.loc[0],self.factory_final.loc[1]]), # Multiply with the location
                 (pix_square_size, pix_square_size),
@@ -500,7 +498,7 @@ class GridWorldEnv(gym.Env):
         # Factory Delivery
         pygame.draw.rect(
             canvas,
-            (0, 255, 0),
+            (128, 0, 0),
             pygame.Rect(
                 pix_square_size * np.array([self.factory_delivery.loc[0],self.factory_delivery.loc[1]]), # Multiply with the location
                 (pix_square_size, pix_square_size),
@@ -521,24 +519,24 @@ class GridWorldEnv(gym.Env):
         pygame.draw.circle(
             canvas,
             (0, 0, 255),
-            (np.array(self.bots_list[0].currLoc[0],self.bots_list[0].currLoc[1]) + 0.5) * pix_square_size,
-            pix_square_size / 3,
+            (np.array([self.bots_list[0].currLoc[0],self.bots_list[0].currLoc[1]]) + 0.25) * pix_square_size,
+            pix_square_size / 6,
         )
 
         # Now we draw the agent 2
         pygame.draw.circle(
             canvas,
-            (0, 0, 255),
-            (np.array(self.bots_list[1].currLoc[0],self.bots_list[1].currLoc[1]) + 0.5) * pix_square_size,
-            pix_square_size / 3,
+            (255, 100, 0),
+            (np.array([self.bots_list[1].currLoc[0],self.bots_list[1].currLoc[1]]) + 0.5) * pix_square_size,
+            pix_square_size / 6,
         )
 
         # Now we draw the agent 3
         pygame.draw.circle(
             canvas,
-            (0, 0, 255),
-            (np.array(self.bots_list[2].currLoc[0],self.bots_list[2].currLoc[1]) + 0.5) * pix_square_size,
-            pix_square_size / 3,
+            (255, 0, 255),
+            (np.array([self.bots_list[2].currLoc[0],self.bots_list[2].currLoc[1]]) + 0.75) * pix_square_size,
+            pix_square_size / 6,
         )
 
         # Finally, add some gridlines
@@ -586,7 +584,7 @@ if __name__ == '__main__':
     env = GridWorldEnv()
 
     observation, info = env.reset()
-    print(observation)
+    #print(observation)
 
     env.render_mode == "human"
 
@@ -594,11 +592,12 @@ if __name__ == '__main__':
     framerate = 20 # FPS
 
     frames = [] # Empty list to append frames to
-
-    bot = LogisticBot()
-
-    for _ in range(1000):
-        action = np.random.randint(0,4)  # this is where you would insert your policy
+    bots_task_list = [-1,-1,-1]
+    for _ in range(500):
+        for task in range(len(bots_task_list)):
+            if bots_task_list[task] == -1:
+                bots_task_list[task] = np.random.randint(0,4)  
+        #bots_task_list = [np.random.randint(0,4),np.random.randint(0,4),np.random.randint(0,4)]  # this is where you would insert your policy
         observation, reward, terminated, truncated, info, bots_task_list = env.step(bots_task_list) #2d array []
         px = env._render_frame()
         frames.append(px)
@@ -611,4 +610,4 @@ if __name__ == '__main__':
     env.close()
     #print(frames)
     #print(np.random.randint(0,4))
-    media.write_video('temp/videotrial.mp4', frames, fps=10)
+    media.write_video('temp/videotrial.mp4', frames, fps=5)
