@@ -191,45 +191,31 @@ class GridWorldEnv(gym.Env):
                 # "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
                 # "factory": spaces.Box(0, size - 1, shape=(2,), dtype=int),
                 # "recharge": spaces.Box(0, size - 1, shape=(2,), dtype=int)
-                "bot_1_distances":  Dict(
-                    {
-                        "factory_raw":  Discrete(9),
-                        "factory_inter":  Discrete(9),
-                        "factory_final":  Discrete(9),
-                        "factory_delivery":  Discrete(9),
-                        "recharge":  Discrete(9)
-                    }
-                ),
-                "bot_2_distances":  Dict({
-                        "factory_raw":  Discrete(9),
-                        "factory_inter":  Discrete(9),
-                        "factory_final":  Discrete(9),
-                        "factory_delivery":  Discrete(9),
-                        "recharge":  Discrete(9)
-                }),
-                "bot_3_distances":  Dict({
-                        "factory_raw":  Discrete(9),
-                        "factory_inter":  Discrete(9),
-                        "factory_final":  Discrete(9),
-                        "factory_delivery":  Discrete(9),
-                        "recharge":  Discrete(9)
-                }),
-                "bot_charges":  Dict({
-                        "bot_1":  Discrete(101),
-                        "bot_2":  Discrete(101),
-                        "bot_3":  Discrete(101)
-                }),
-                "factory_raw":  Dict({
-                        "factory_raw":  Discrete(1),
-                        "factory_inter":  Discrete(1),
-                        "factory_final":  Discrete(1),
-                        "factory_delivery":  Discrete(1)
-                }),
-                "factory_proc_buff":  Dict({
-                        "factory_raw":  Discrete(101),
-                        "factory_inter":  Discrete(101),
-                        "factory_final":  Discrete(101)
-                })
+                        "bot_1_factory_raw":  Discrete(9),
+                        "bot_1_factory_inter":  Discrete(9),
+                        "bot_1_factory_final":  Discrete(9),
+                        "bot_1_factory_delivery":  Discrete(9),
+                        "bot_1_recharge":  Discrete(9),
+                        "bot_2_factory_raw":  Discrete(9),
+                        "bot_2_factory_inter":  Discrete(9),
+                        "bot_2_factory_final":  Discrete(9),
+                        "bot_2_factory_delivery":  Discrete(9),
+                        "bot_2_recharge":  Discrete(9),
+                        "bot_3_factory_raw":  Discrete(9),
+                        "bot_3_factory_inter":  Discrete(9),
+                        "bot_3_factory_final":  Discrete(9),
+                        "bot_3_factory_delivery":  Discrete(9),
+                        "bot_3_recharge":  Discrete(9),
+                        "bot_1_charge":  Discrete(101),
+                        "bot_2_charge":  Discrete(101),
+                        "bot_3_charge":  Discrete(101),
+                        "factory_raw_input":  Discrete(5),
+                        "factory_inter_input":  Discrete(5),
+                        "factory_final_input":  Discrete(5),
+                        "factory_delivery_input":  Discrete(5),
+                        "factory_raw_procBuff":  Discrete(101),
+                        "factory_inter_procBuff":  Discrete(101),
+                        "factory_final_procBuff":  Discrete(101)
             }
         )
 
@@ -238,7 +224,7 @@ class GridWorldEnv(gym.Env):
         self.recharge_color = (111,111,222)
 
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
-        self.action_space = spaces.Discrete(7)
+        self.action_space = spaces.MultiDiscrete(np.array([7,7,7]))
 
         """
         The following dictionary maps abstract actions from `self.action_space` to 
@@ -293,6 +279,7 @@ class GridWorldEnv(gym.Env):
             factor_final_loc = self.factory_final.loc
             factor_delivery_loc = self.factory_delivery.loc
             recharge_loc = self.reacharge_station.loc
+            obs_keys = "bot_" + str(i+1) + "_"
             bot_distances = {
                         "factory_raw": abs(bot_loc[0] - factor_raw_loc[0]) + abs(bot_loc[1] - factor_raw_loc[1]),
                         "factory_inter": abs(bot_loc[0] - factor_inter_loc[0]) + abs(bot_loc[1] - factor_inter_loc[1]),
@@ -300,15 +287,16 @@ class GridWorldEnv(gym.Env):
                         "factory_delivery": abs(bot_loc[0] - factor_delivery_loc[0]) + abs(bot_loc[1] - factor_delivery_loc[1]),
                         "recharge": abs(bot_loc[0] - recharge_loc[0]) + abs(bot_loc[1] - recharge_loc[1])
                     }
-            obs_keys = "bot_" + str(i+1) + "_distances" 
-            obs[obs_keys] = bot_distances
+            obs[obs_keys + "factory_raw"] = bot_distances["factory_raw"]
+            obs[obs_keys + "factory_inter"] = bot_distances["factory_inter"]
+            obs[obs_keys + "factory_final"] = bot_distances["factory_final"]
+            obs[obs_keys + "factory_delivery"] = bot_distances["factory_delivery"]
+            obs[obs_keys + "recharge"] = bot_distances["recharge"]
         
-        bot_charges = {
-                "bot_1": self.bots_list[0].charge,
-                "bot_2": self.bots_list[1].charge,
-                "bot_3": self.bots_list[2].charge
-            }
-        obs["bot_charges"] = bot_charges
+
+        obs["bot_1_charge"] = self.bots_list[0].charge
+        obs["bot_2_charge"] = self.bots_list[1].charge
+        obs["bot_3_charge"] = self.bots_list[2].charge
 
         factory_raw = {
                 "factory_raw": self.factory_raw.raw,
@@ -316,14 +304,21 @@ class GridWorldEnv(gym.Env):
                 "factory_final": self.factory_final.raw,
                 "factory_delivery": self.factory_delivery.raw
         }
-        obs["factory_raw"] = factory_raw
+        obs["factory_raw_input"] = factory_raw["factory_raw"]
+        obs["factory_inter_input"] = factory_raw["factory_inter"]
+        obs["factory_final_input"] = factory_raw["factory_final"]
+        obs["factory_delivery_input"] = factory_raw["factory_delivery"]
 
         factory_proc_buff = {
                 "factory_raw": int(len(self.factory_raw.procBuf)/self.factory_raw.procBuf_len*100),
                 "factory_inter": int(len(self.factory_inter.procBuf)/self.factory_inter.procBuf_len*100),
                 "factory_final": int(len(self.factory_final.procBuf)/self.factory_final.procBuf_len*100)
         }
-        obs["factory_proc_buff"] = factory_proc_buff
+        obs["factory_raw_procBuff"] = factory_proc_buff["factory_raw"]
+        obs["factory_inter_procBuff"] = factory_proc_buff["factory_inter"]
+        obs["factory_final_procBuff"] = factory_proc_buff["factory_final"]
+
+        # print(obs)
 
         return obs
 
@@ -362,7 +357,9 @@ class GridWorldEnv(gym.Env):
         self.time = 0
 
         observation = self._get_obs()
-        info = self._get_info()
+        info = {0 : -1,
+                1 : -1,
+                2 : -1}
 
         if self.render_mode == "human":
             self._render_frame()
@@ -481,7 +478,9 @@ class GridWorldEnv(gym.Env):
 
 
         observation = self._get_obs()
-        info = self._get_info()
+        info = {0 : bots_task_list[0],
+                1 : bots_task_list[1],
+                2 : bots_task_list[2]}
 
         self.time += 1
         #Terminate when time has reached over episode time limit
@@ -491,7 +490,7 @@ class GridWorldEnv(gym.Env):
         if self.render_mode == "human":
             self._render_frame()
 
-        return observation, reward, terminated, False, info, bots_task_list
+        return observation, reward, terminated, False, info
 
     def render(self):
         if self.render_mode == "rgb_array":
@@ -652,12 +651,12 @@ if __name__ == '__main__':
     task_list = []
     for _ in range(500):
         for task in range(len(bots_task_list)):
-            if bots_task_list[task] == -1:
+            if info[task] == -1:
                 bots_task_list[task] = np.random.randint(0,6)
         task_list.append(bots_task_list.copy()) 
         #print(bots_task_list) 
         #bots_task_list = [np.random.randint(0,4),np.random.randint(0,4),np.random.randint(0,4)]  # this is where you would insert your policy
-        observation, reward, terminated, truncated, info, bots_task_list = env.step(bots_task_list) #2d array []
+        observation, reward, terminated, truncated, info = env.step(bots_task_list) #2d array []
         px = env._render_frame()
         frames.append(px)
         reward_array.append(reward)
