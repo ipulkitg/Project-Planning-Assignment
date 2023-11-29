@@ -33,7 +33,6 @@ recharge_slots = 4
 processing = 0
 
 
-
 class LogisticBot:
     def __init__(self,currLoc,id) -> None:
         self.id = id
@@ -226,6 +225,7 @@ class GridWorldEnv(gym.Env):
         #Observation Variables
         self.time = 0
         self.recharge_color = (111,111,222)
+        self.flag = True
 
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
         self.action_space = spaces.Discrete(7)
@@ -350,6 +350,8 @@ class GridWorldEnv(gym.Env):
 
         self.reacharge_station = RechargeStation((4,0))
 
+        self.flag = True
+
         #self.bots_list = [LogisticBot((2,0),1),LogisticBot((2,0),2),LogisticBot((2,0),3)] #Randomize bots start location
 
         self.bots_list = []
@@ -435,16 +437,27 @@ class GridWorldEnv(gym.Env):
                     break
                 self.bots_list[i].task = -1 #Do a small positive reward
                 bots_task_list[i] = -1
-                reward += pd_reward
-            elif self.action_dict[task] == "recharge":
-                if self.bots_list[i].currLoc == self.reacharge_station.loc:
-                    self.reacharge_station.put_to_charge(self.bots_list[i].charge,self.bots_list[i].id) #100-self.bots_list[i].charge will give the scale of how much reward to give
-                    reward += (100-self.bots_list[i].charge)/20
-                    self.bots_list[i].task = 8 #Do a scale positive reward
-                    bots_task_list[i] = 8
+                if pd_reward == 0:
+                    reward -= 5
                 else:
-                    self.bots_list[i].task = -1 #Do a small negative reward
-                    reward -= 1
+                    reward += pd_reward
+            elif self.action_dict[task] == "recharge":
+                if self.flag:
+                    if self.bots_list[i].currLoc == self.reacharge_station.loc:
+                        self.reacharge_station.put_to_charge(self.bots_list[i].charge,self.bots_list[i].id) #100-self.bots_list[i].charge will give the scale of how much reward to give
+                        if self.bots_list[i].charge == 100:
+                            reward -= 5
+                        else:
+                            reward += (100-self.bots_list[i].charge)/20
+                        print("Entered")
+                        self.bots_list[i].task = task #Do a scale positive reward
+                        bots_task_list[i] = task
+                        self.flag = False
+                    else:
+                        self.bots_list[i].task = -1 #Do a small negative reward
+                        bots_task_list[i] = -1
+                        reward -= 1
+                        self.flag = True
             
         for i,bots in enumerate(self.bots_list): # Execute movement for each bot and then check if it is completed
             if bots.task < 5 and bots.task >= 0: # If its a movement task then do movement
@@ -459,6 +472,8 @@ class GridWorldEnv(gym.Env):
             for bots in bots_id_list:
                 self.bots_list[bots-1].task = -1
                 bots_task_list[bots-1] = -1
+                self.bots_list[bots-1].charge = 100
+                self.flag = True
 
         self.factory_raw.rawBuf = [0]
         if self.factory_raw.raw_to_proc():
@@ -494,6 +509,8 @@ class GridWorldEnv(gym.Env):
         
         if self.render_mode == "human":
             self._render_frame()
+
+        reward += 0.05
 
         return observation, reward, terminated, False, info
 

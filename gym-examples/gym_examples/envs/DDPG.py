@@ -12,31 +12,27 @@ env = gw.GridWorldEnv()
 # n_actions = 7
 # action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
 
-# model = DQN("MultiInputPolicy", env, verbose=1)  # action_noise=action_noise, 
-# model.learn(total_timesteps=100000, log_interval=10)
-# model.save("ddpg_grid_world")
-#vec_env = model.get_env()
+model = DQN("MultiInputPolicy", env, verbose=1)  # action_noise=action_noise, 
+model.learn(total_timesteps=100000, log_interval=10)
+model.save("ddpg_grid_world")
+vec_env = model.get_env()
 
-# del model # remove to demonstrate saving and loading
+del model # remove to demonstrate saving and loading
 
 model = DQN.load("ddpg_grid_world")
-
-vec_env = model.get_env()
-print(vec_env)
+# model.set_env(env)
+# vec_env = model.get_env()
 task_list = []
 obs = vec_env.reset()
-info = {0 : -1}
+info = [{0 : -1}]
 reward_array = []
 frames = []
 reward_sum = 0
 for i in range(500):
-    if info[0] == 8:
-        obs, rewards, dones, info = vec_env.step(8)
-    elif info[0] != -1:
-        obs, rewards, dones, info = vec_env.step(action)
-    else:
+    if info[0][0] == -1:
         action, _states = model.predict(obs)
-        obs, rewards, dones, info = vec_env.step(action)
+    obs, rewards, dones, info = vec_env.step(action)
+    print(info)
     task_list.append(action)
     px = env._render_frame()
     frames.append(px)
