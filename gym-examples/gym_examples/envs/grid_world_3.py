@@ -116,11 +116,15 @@ class RechargeStation:
     #When a bot reaches a station
     def put_to_charge(self,curr_charge,id):       
         if len(self.slots) != recharge_slots:
+            for slot in self.slots:
+                if slot[1] == id:
+                   return None 
             self.slots.append([curr_charge,id]) #We are appending each id and their current charge
+        print(self.slots)
 
     #Every step 
     def charge(self):
-        id_list = []                                  #List of IDs
+        id_list = [] 
         for charge in range(len(self.slots)):         
             self.slots[charge][0] += step_recharge
             if self.slots[charge][0] >= 100:          #If we are fully charged then free the slot and add the bot's id to id_list
@@ -357,9 +361,7 @@ class GridWorldEnv(gym.Env):
         self.time = 0
 
         observation = self._get_obs()
-        info = {0 : -1,
-                1 : -1,
-                2 : -1}
+        info = {0 : -1}
 
         if self.render_mode == "human":
             self._render_frame()
@@ -367,12 +369,14 @@ class GridWorldEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        bots_task_list = [action]
+        bots_task_list = [action, -1, -1]
 
         terminated = False
         reward = 0
 
         for i,task in enumerate(bots_task_list):
+            if task == -1 or task == 8:
+                continue
             if self.action_dict[task] == "go_to_raw":
                 if self.bots_list[i].currLoc == self.location_dict[task]:
                     bots_task_list[i] = -1
@@ -436,7 +440,8 @@ class GridWorldEnv(gym.Env):
                 if self.bots_list[i].currLoc == self.reacharge_station.loc:
                     self.reacharge_station.put_to_charge(self.bots_list[i].charge,self.bots_list[i].id) #100-self.bots_list[i].charge will give the scale of how much reward to give
                     reward += (100-self.bots_list[i].charge)/20
-                    self.bots_list[i].task = task #Do a scale positive reward
+                    self.bots_list[i].task = 8 #Do a scale positive reward
+                    bots_task_list[i] = 8
                 else:
                     self.bots_list[i].task = -1 #Do a small negative reward
                     reward -= 1
