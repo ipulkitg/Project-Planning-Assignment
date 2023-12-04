@@ -119,7 +119,7 @@ class RechargeStation:
                 if slot[1] == id:
                    return None 
             self.slots.append([curr_charge,id]) #We are appending each id and their current charge
-        print(self.slots)
+        #print(self.slots)
 
     #Every step 
     def charge(self):
@@ -148,14 +148,14 @@ class Factory:
         if self.rawBuf and self.processing == self.procTime: #if there is raw materials in buffer and the prev raw material is not processing
             self.rawBuf.pop()
             self.proc_check = True
-        elif len(self.procBuf) != proc_limit and self.processing <= 0: #if processing is over and proc buffer is not full
+        if len(self.procBuf) != proc_limit and self.processing <= 0: #if processing is over and proc buffer is not full
             self.procBuf.append(self.processed)
             self.processing == self.procTime
             self.proc_check = False
-        elif len(self.procBuf) == proc_limit: #if it is full return True
+        if len(self.procBuf) == proc_limit: #if it is full return True
             #Negative Reward for not picking up materials
             return True
-        elif self.proc_check:
+        if self.proc_check:
             self.processing -= 1
         return False # Return False when proc_Buff is not full
 
@@ -226,6 +226,7 @@ class GridWorldEnv(gym.Env):
         self.time = 0
         self.recharge_color = (111,111,222)
         self.flag = True
+        self.taskStatus = -1
 
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
         self.action_space = spaces.Discrete(7)
@@ -352,6 +353,8 @@ class GridWorldEnv(gym.Env):
 
         self.flag = True
 
+        self.taskStatus = -1
+
         #self.bots_list = [LogisticBot((2,0),1),LogisticBot((2,0),2),LogisticBot((2,0),3)] #Randomize bots start location
 
         self.bots_list = []
@@ -440,7 +443,7 @@ class GridWorldEnv(gym.Env):
                 if pd_reward == 0:
                     reward -= 5
                 else:
-                    reward += pd_reward
+                    reward += pd_reward * 2
             elif self.action_dict[task] == "recharge":
                 if self.flag:
                     if self.bots_list[i].currLoc == self.reacharge_station.loc:
@@ -448,8 +451,8 @@ class GridWorldEnv(gym.Env):
                         if self.bots_list[i].charge == 100:
                             reward -= 5
                         else:
-                            reward += (100-self.bots_list[i].charge)/20
-                        print("Entered")
+                            reward += (100-self.bots_list[i].charge)/20 # 100-20 = 80/20 = 4
+                        # print("Entered")
                         self.bots_list[i].task = task #Do a scale positive reward
                         bots_task_list[i] = task
                         self.flag = False
@@ -501,16 +504,18 @@ class GridWorldEnv(gym.Env):
 
         observation = self._get_obs()
         info = {0 : bots_task_list[0]}
+        self.taskStatus = bots_task_list[0]
 
         self.time += 1
         #Terminate when time has reached over episode time limit
+        if self.time % 20 == 0:
+            reward += 1
         if self.time >= 500:
             terminated = True
         
         if self.render_mode == "human":
             self._render_frame()
 
-        reward += 0.05
 
         return observation, reward, terminated, False, info
 
