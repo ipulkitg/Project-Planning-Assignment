@@ -1,5 +1,10 @@
 # Group 15 - Multi Agent Logistics Planning
-<img width="1572" alt="image" src="https://github.com/ipulkitg/Project-Planning-Assignment/assets/71349159/67410e8c-7472-4586-a82e-a00177ac1b38">
 
 In response to the burgeoning challenges in the domain of multi-agent logistics environments, our research project was conceived with a focus on investigating the efficacy of reinforcement learning (RL) algorithms, particularly in the context of sequential task planning. The crafting-world problem, with its successful application of the Compositional Plan Vectors technique, provided a compelling background for our exploration. In the face of complex logistical scenarios, where the coordination of sequential tasks is paramount, we identified a pervasive problem: the inefficiency of existing solutions in addressing the intricacies of task sequencing. This challenge holds substantial importance as streamlined task planning directly impacts the efficiency of logistical processes, thereby influencing various industries and supply chains. Our innovative solution centers on the strategic use of RL algorithms, with a particular emphasis on task breakdown and subsequent agent training. After evaluating several algorithms, including SARSA and A2C, we found that DQN exhibited superior performance and thus became the linchpin of our approach. By meticulously training RL agents to master individual task components before progressing to the composition of meaningful sequences, our solution mirrors the success observed in the crafting-world problem. The results of our experiments, conducted in both adapted and custom environments such as chaotic and robotic warehouses, underscore the robustness of our methodology. Notably, DQN consistently outperformed other algorithms, validating its suitability for the complex challenges associated with sequential task planning in multi-agent logistics environments. These outcomes highlight the practical significance of our research, offering a promising avenue for enhancing efficiency in logistical operations and supply chain management.
 
+Project Members:
+1. Pulkit (me) - Leader
+2. Aditya Chakravarthi
+3. Ayush Joshi
+4. Rupesh Barve
+5. Aahn Sachin Deshpande
