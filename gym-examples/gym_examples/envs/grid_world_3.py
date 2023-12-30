@@ -33,7 +33,6 @@ recharge_slots = 4
 processing = 0
 
 
-
 class LogisticBot:
     def __init__(self,currLoc,id) -> None:
         self.id = id
@@ -116,11 +115,15 @@ class RechargeStation:
     #When a bot reaches a station
     def put_to_charge(self,curr_charge,id):       
         if len(self.slots) != recharge_slots:
+            for slot in self.slots:
+                if slot[1] == id:
+                   return None 
             self.slots.append([curr_charge,id]) #We are appending each id and their current charge
+        #print(self.slots)
 
     #Every step 
     def charge(self):
-        id_list = []                                  #List of IDs
+        id_list = [] 
         for charge in range(len(self.slots)):         
             self.slots[charge][0] += step_recharge
             if self.slots[charge][0] >= 100:          #If we are fully charged then free the slot and add the bot's id to id_list
@@ -145,14 +148,14 @@ class Factory:
         if self.rawBuf and self.processing == self.procTime: #if there is raw materials in buffer and the prev raw material is not processing
             self.rawBuf.pop()
             self.proc_check = True
-        elif len(self.procBuf) != proc_limit and self.processing <= 0: #if processing is over and proc buffer is not full
+        if len(self.procBuf) != proc_limit and self.processing <= 0: #if processing is over and proc buffer is not full
             self.procBuf.append(self.processed)
             self.processing == self.procTime
             self.proc_check = False
-        elif len(self.procBuf) == proc_limit: #if it is full return True
+        if len(self.procBuf) == proc_limit: #if it is full return True
             #Negative Reward for not picking up materials
             return True
-        elif self.proc_check:
+        if self.proc_check:
             self.processing -= 1
         return False # Return False when proc_Buff is not full
 
@@ -191,51 +194,39 @@ class GridWorldEnv(gym.Env):
                 # "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
                 # "factory": spaces.Box(0, size - 1, shape=(2,), dtype=int),
                 # "recharge": spaces.Box(0, size - 1, shape=(2,), dtype=int)
-                "bot_1_distances":  Dict(
-                    {
-                        "factory_raw":  Discrete(9),
-                        "factory_inter":  Discrete(9),
-                        "factory_final":  Discrete(9),
-                        "factory_delivery":  Discrete(9),
-                        "recharge":  Discrete(9)
-                    }
-                ),
-                "bot_2_distances":  Dict({
-                        "factory_raw":  Discrete(9),
-                        "factory_inter":  Discrete(9),
-                        "factory_final":  Discrete(9),
-                        "factory_delivery":  Discrete(9),
-                        "recharge":  Discrete(9)
-                }),
-                "bot_3_distances":  Dict({
-                        "factory_raw":  Discrete(9),
-                        "factory_inter":  Discrete(9),
-                        "factory_final":  Discrete(9),
-                        "factory_delivery":  Discrete(9),
-                        "recharge":  Discrete(9)
-                }),
-                "bot_charges":  Dict({
-                        "bot_1":  Discrete(101),
-                        "bot_2":  Discrete(101),
-                        "bot_3":  Discrete(101)
-                }),
-                "factory_raw":  Dict({
-                        "factory_raw":  Discrete(1),
-                        "factory_inter":  Discrete(1),
-                        "factory_final":  Discrete(1),
-                        "factory_delivery":  Discrete(1)
-                }),
-                "factory_proc_buff":  Dict({
-                        "factory_raw":  Discrete(101),
-                        "factory_inter":  Discrete(101),
-                        "factory_final":  Discrete(101)
-                })
+                        "bot_1_factory_raw":  Discrete(9),
+                        "bot_1_factory_inter":  Discrete(9),
+                        "bot_1_factory_final":  Discrete(9),
+                        "bot_1_factory_delivery":  Discrete(9),
+                        "bot_1_recharge":  Discrete(9),
+                        "bot_2_factory_raw":  Discrete(9),
+                        "bot_2_factory_inter":  Discrete(9),
+                        "bot_2_factory_final":  Discrete(9),
+                        "bot_2_factory_delivery":  Discrete(9),
+                        "bot_2_recharge":  Discrete(9),
+                        "bot_3_factory_raw":  Discrete(9),
+                        "bot_3_factory_inter":  Discrete(9),
+                        "bot_3_factory_final":  Discrete(9),
+                        "bot_3_factory_delivery":  Discrete(9),
+                        "bot_3_recharge":  Discrete(9),
+                        "bot_1_charge":  Discrete(101),
+                        "bot_2_charge":  Discrete(101),
+                        "bot_3_charge":  Discrete(101),
+                        "factory_raw_input":  Discrete(5),
+                        "factory_inter_input":  Discrete(5),
+                        "factory_final_input":  Discrete(5),
+                        "factory_delivery_input":  Discrete(5),
+                        "factory_raw_procBuff":  Discrete(101),
+                        "factory_inter_procBuff":  Discrete(101),
+                        "factory_final_procBuff":  Discrete(101)
             }
         )
 
         #Observation Variables
         self.time = 0
         self.recharge_color = (111,111,222)
+        self.flag = True
+        self.taskStatus = -1
 
         # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
         self.action_space = spaces.Discrete(7)
@@ -293,6 +284,7 @@ class GridWorldEnv(gym.Env):
             factor_final_loc = self.factory_final.loc
             factor_delivery_loc = self.factory_delivery.loc
             recharge_loc = self.reacharge_station.loc
+            obs_keys = "bot_" + str(i+1) + "_"
             bot_distances = {
                         "factory_raw": abs(bot_loc[0] - factor_raw_loc[0]) + abs(bot_loc[1] - factor_raw_loc[1]),
                         "factory_inter": abs(bot_loc[0] - factor_inter_loc[0]) + abs(bot_loc[1] - factor_inter_loc[1]),
@@ -300,15 +292,16 @@ class GridWorldEnv(gym.Env):
                         "factory_delivery": abs(bot_loc[0] - factor_delivery_loc[0]) + abs(bot_loc[1] - factor_delivery_loc[1]),
                         "recharge": abs(bot_loc[0] - recharge_loc[0]) + abs(bot_loc[1] - recharge_loc[1])
                     }
-            obs_keys = "bot_" + str(i+1) + "_distances" 
-            obs[obs_keys] = bot_distances
+            obs[obs_keys + "factory_raw"] = bot_distances["factory_raw"]
+            obs[obs_keys + "factory_inter"] = bot_distances["factory_inter"]
+            obs[obs_keys + "factory_final"] = bot_distances["factory_final"]
+            obs[obs_keys + "factory_delivery"] = bot_distances["factory_delivery"]
+            obs[obs_keys + "recharge"] = bot_distances["recharge"]
         
-        bot_charges = {
-                "bot_1": self.bots_list[0].charge,
-                "bot_2": self.bots_list[1].charge,
-                "bot_3": self.bots_list[2].charge
-            }
-        obs["bot_charges"] = bot_charges
+
+        obs["bot_1_charge"] = self.bots_list[0].charge
+        obs["bot_2_charge"] = self.bots_list[1].charge
+        obs["bot_3_charge"] = self.bots_list[2].charge
 
         factory_raw = {
                 "factory_raw": self.factory_raw.raw,
@@ -316,14 +309,21 @@ class GridWorldEnv(gym.Env):
                 "factory_final": self.factory_final.raw,
                 "factory_delivery": self.factory_delivery.raw
         }
-        obs["factory_raw"] = factory_raw
+        obs["factory_raw_input"] = factory_raw["factory_raw"]
+        obs["factory_inter_input"] = factory_raw["factory_inter"]
+        obs["factory_final_input"] = factory_raw["factory_final"]
+        obs["factory_delivery_input"] = factory_raw["factory_delivery"]
 
         factory_proc_buff = {
                 "factory_raw": int(len(self.factory_raw.procBuf)/self.factory_raw.procBuf_len*100),
                 "factory_inter": int(len(self.factory_inter.procBuf)/self.factory_inter.procBuf_len*100),
                 "factory_final": int(len(self.factory_final.procBuf)/self.factory_final.procBuf_len*100)
         }
-        obs["factory_proc_buff"] = factory_proc_buff
+        obs["factory_raw_procBuff"] = factory_proc_buff["factory_raw"]
+        obs["factory_inter_procBuff"] = factory_proc_buff["factory_inter"]
+        obs["factory_final_procBuff"] = factory_proc_buff["factory_final"]
+
+        # print(obs)
 
         return obs
 
@@ -351,6 +351,10 @@ class GridWorldEnv(gym.Env):
 
         self.reacharge_station = RechargeStation((4,0))
 
+        self.flag = True
+
+        self.taskStatus = -1
+
         #self.bots_list = [LogisticBot((2,0),1),LogisticBot((2,0),2),LogisticBot((2,0),3)] #Randomize bots start location
 
         self.bots_list = []
@@ -362,18 +366,22 @@ class GridWorldEnv(gym.Env):
         self.time = 0
 
         observation = self._get_obs()
-        info = self._get_info()
+        info = {0 : -1}
 
         if self.render_mode == "human":
             self._render_frame()
 
         return observation, info
 
-    def step(self, bots_task_list):
+    def step(self, action):
+        bots_task_list = [action, -1, -1]
+
         terminated = False
         reward = 0
 
         for i,task in enumerate(bots_task_list):
+            if task == -1 or task == 8:
+                continue
             if self.action_dict[task] == "go_to_raw":
                 if self.bots_list[i].currLoc == self.location_dict[task]:
                     bots_task_list[i] = -1
@@ -432,15 +440,27 @@ class GridWorldEnv(gym.Env):
                     break
                 self.bots_list[i].task = -1 #Do a small positive reward
                 bots_task_list[i] = -1
-                reward += pd_reward
-            elif self.action_dict[task] == "recharge":
-                if self.bots_list[i].currLoc == self.reacharge_station.loc:
-                    self.reacharge_station.put_to_charge(self.bots_list[i].charge,self.bots_list[i].id) #100-self.bots_list[i].charge will give the scale of how much reward to give
-                    reward += (100-self.bots_list[i].charge)/20
-                    self.bots_list[i].task = task #Do a scale positive reward
+                if pd_reward == 0:
+                    reward -= 5
                 else:
-                    self.bots_list[i].task = -1 #Do a small negative reward
-                    reward -= 1
+                    reward += pd_reward * 2
+            elif self.action_dict[task] == "recharge":
+                if self.flag:
+                    if self.bots_list[i].currLoc == self.reacharge_station.loc:
+                        self.reacharge_station.put_to_charge(self.bots_list[i].charge,self.bots_list[i].id) #100-self.bots_list[i].charge will give the scale of how much reward to give
+                        if self.bots_list[i].charge == 100:
+                            reward -= 5
+                        else:
+                            reward += (100-self.bots_list[i].charge)/20 # 100-20 = 80/20 = 4
+                        # print("Entered")
+                        self.bots_list[i].task = task #Do a scale positive reward
+                        bots_task_list[i] = task
+                        self.flag = False
+                    else:
+                        self.bots_list[i].task = -1 #Do a small negative reward
+                        bots_task_list[i] = -1
+                        reward -= 1
+                        self.flag = True
             
         for i,bots in enumerate(self.bots_list): # Execute movement for each bot and then check if it is completed
             if bots.task < 5 and bots.task >= 0: # If its a movement task then do movement
@@ -455,6 +475,8 @@ class GridWorldEnv(gym.Env):
             for bots in bots_id_list:
                 self.bots_list[bots-1].task = -1
                 bots_task_list[bots-1] = -1
+                self.bots_list[bots-1].charge = 100
+                self.flag = True
 
         self.factory_raw.rawBuf = [0]
         if self.factory_raw.raw_to_proc():
@@ -481,17 +503,21 @@ class GridWorldEnv(gym.Env):
 
 
         observation = self._get_obs()
-        info = self._get_info()
+        info = {0 : bots_task_list[0]}
+        self.taskStatus = bots_task_list[0]
 
         self.time += 1
         #Terminate when time has reached over episode time limit
+        if self.time % 20 == 0:
+            reward += 1
         if self.time >= 500:
             terminated = True
         
         if self.render_mode == "human":
             self._render_frame()
 
-        return observation, reward, terminated, False, info, bots_task_list
+
+        return observation, reward, terminated, False, info
 
     def render(self):
         if self.render_mode == "rgb_array":
@@ -652,12 +678,12 @@ if __name__ == '__main__':
     task_list = []
     for _ in range(500):
         for task in range(len(bots_task_list)):
-            if bots_task_list[task] == -1:
+            if info[task] == -1:
                 bots_task_list[task] = np.random.randint(0,6)
         task_list.append(bots_task_list.copy()) 
         #print(bots_task_list) 
         #bots_task_list = [np.random.randint(0,4),np.random.randint(0,4),np.random.randint(0,4)]  # this is where you would insert your policy
-        observation, reward, terminated, truncated, info, bots_task_list = env.step(bots_task_list) #2d array []
+        observation, reward, terminated, truncated, info = env.step(bots_task_list) #2d array []
         px = env._render_frame()
         frames.append(px)
         reward_array.append(reward)
