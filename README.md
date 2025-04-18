@@ -79,22 +79,15 @@ Experiments showed DQN-trained agents could dynamically sequence and execute mul
 
 ---
 
-## 📂 Files & Artifacts
-
-- `environment/`: Custom Gym environment codebase
-- `training/`: Scripts for training DQN, SARSA, and A2C agents
-- `results/`: Evaluation results and saved models
-- `posters/`: Final presentation posters
-- `README.md`: Project overview and documentation
-
----
-
 ## 📌 Conclusion
 
 This project demonstrates how reinforcement learning, particularly DQN, can be applied to **complex, multi-agent logistics environments** to enable adaptive, efficient, and autonomous task planning. The results offer promising directions for improving **supply chain automation**, **robotics**, and **dynamic scheduling systems**.
 
 ---
+## Demo
+![output](https://github.com/user-attachments/assets/12f5a559-3058-4c2e-9315-b5c7be079647)
 
+---
 ## 📎 Related Work
 
 - [Wei et al., 2022] Compositional Plan Vectors in the Crafting World
